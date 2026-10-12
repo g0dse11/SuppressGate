@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "suppressgate-prototype"
+version = "0.1.1.dev0"
+description = "Prototype Git review gate for newly introduced Python lint and security suppressions"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{name = "SuppressGate prototype"}]
+dependencies = []
+
+[project.scripts]
+suppress-gate = "suppressgate.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

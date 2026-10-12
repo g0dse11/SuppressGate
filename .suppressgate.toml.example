@@ -1,0 +1,11 @@
+# Copy to .suppressgate.toml in the root of YOUR repository to opt in.
+# This configuration is only applied to new / changed suppressions.
+[policy]
+require_rule = true
+require_reason = true
+
+[policy.protected]
+ruff = ["S608", "S602"]
+bandit = ["B602"]
+# Semgrep rule IDs are case-sensitive.
+semgrep = ["python.lang.security.audit.dangerous-subprocess-use"]
