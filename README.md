@@ -1,83 +1,70 @@
-# SuppressGate — suppression-review prototype
+# SuppressGate
 
-**Status: locally reviewed proof of concept (v0.1.1 dev), not a released security product.**
+**Status: v0.1.1a1 alpha candidate.** Tested on Python 3.11–3.14 on Windows and Ubuntu in GitHub Actions. This is **not** a security guarantee or an independently audited product.
 
-SuppressGate helps reviewers notice when a Git change introduces or modifies a
-Python lint/security suppression. Unlike a count-only suppression ratchet, it
-uses the associated **source-code token signature** to distinguish suppressions:
-fixing an old `# noqa: S608` and adding another to *different code* is reported,
-even if the overall number remains the same.
+SuppressGate helps reviewers notice when a Git change introduces or modifies a Python lint/security suppression. Rather than only counting suppressions, it associates each directive with a **source-code token signature**. Removing an old `# noqa: S608` while adding one to *different code* is reported, even if the total number stays the same.
 
-This is **not** a replacement for Ruff, Bandit or Semgrep. It does **not** run
-those scanners or prove that a justification is truthful. The working name is
-not cleared for branding/package-name availability.
+SuppressGate does **not** replace Ruff, Bandit or Semgrep, run those scanners, or verify that a developer's justification is truthful. Use it as an additional review signal, not a substitute for code review or security scanning.
 
-## Try it (Python 3.11+, Git)
+## Quick start
 
-Unzip and open a terminal in the `SuppressGate` folder:
+**Requirements:** Python 3.11+ and Git for revision comparisons. No third-party runtime Python dependencies, account, or hosted service.
+
+When the GitHub repository is publicly accessible, clone and install it:
 
 ```bash
-python -m pip install -e .
-suppress-gate scan .
-python -m unittest discover -s tests -v
+git clone https://github.com/g0dse11/SuppressGate.git
+cd SuppressGate
+python -m pip install .
+suppress-gate --help
 ```
 
-No nonstandard **runtime** Python dependencies, no accounts, no network calls.
-For a safe end-to-end demonstration that creates a **temporary** Git repo:
+Alternatively, download the repository ZIP from GitHub, extract it, and run `python -m pip install .` inside the extracted project directory. **SuppressGate is not yet published on PyPI**; do not assume `pip install suppressgate` works.
+
+Run a demonstration that creates its own temporary Git repository:
 
 ```bash
 python examples/demo.py
 ```
 
-Editable installation with pip may require build tooling; the source itself
-runs with only the standard library:
+Developers who want to run the test suite can use:
 
 ```bash
-PYTHONPATH=src python -m suppressgate scan .    # Linux/macOS
+python -m unittest discover -s tests -v
 ```
 
-On Windows PowerShell, use `$env:PYTHONPATH = 'src'` and then
-`python -m suppressgate scan .`.
-
-To evaluate an existing **Git** repository (including staged and unstaged
-working-tree files), run from the repository root:
+On a Python project, from **that project's Git repository root**, run:
 
 ```bash
+suppress-gate scan .
 suppress-gate check --base HEAD
 suppress-gate check --base origin/main --format json
 ```
 
-Or from another directory: `suppress-gate check --repo /path/to/repo --base HEAD`.
-The `origin/main` branch must actually exist; `HEAD` always refers to your last
-local commit. Exit status: **0** = policy passed; **1** = policy violations;
-**2** = cannot confidently complete check (bad Git ref, unreadable source,
-invalid configuration, etc.).
+`scan` inventories Python suppressions without needing Git. `check` compares the current working tree, including staged and unstaged changes, with the named Git revision. Use `origin/main` only if that ref exists and is current. `HEAD` means your latest local commit. From another directory, use `suppress-gate check --repo /path/to/repo --base HEAD`.
 
-## Supported annotation forms (v0 prototype)
+**Exit codes:** `0` = policy passed; `1` = policy violations; `2` = check could not reliably complete (for example, invalid Git ref, unreadable source or invalid configuration).
+
+## Supported directives (alpha)
 
 ```python
-# `-- explanation` is SuppressGate's explicit convention for justifications.
+# `-- explanation` is SuppressGate's convention for a justification.
 query = f"SELECT * FROM users WHERE id = {user_id}"  # noqa: S608 -- reviewed false positive
 subprocess.run(cmd, shell=True)  # nosec B602 -- required for a controlled test
 something()  # nosemgrep: python.lang.security.some-rule -- safe because input is fixed
 ```
 
-- `# noqa[: RULE[, RULE...]]` → Ruff / Flake8-style suppressions
-- `# nosec [RULE[, RULE...]]` → Bandit suppressions
-- `# nosemgrep[: RULE[, RULE...]]` → Semgrep suppressions
+- `# noqa[: RULE[, RULE...]]` — Ruff/Flake8-style suppressions
+- `# nosec [RULE[, RULE...]]` — Bandit suppressions
+- `# nosemgrep[: RULE[, RULE...]]` — Semgrep suppressions
 
-The parser recognises Python **COMMENT tokens**, not matching-looking text inside
-strings or docstrings. A standalone suppression is associated with the next
-non-comment line within three lines. We consider `--` the justification
-separator; each scanner has its own syntax, so validate compatibility in your
-actual projects before putting the gate in CI.
+SuppressGate uses Python's **COMMENT tokens** to avoid treating strings and docstrings as directives. A standalone suppression is associated with the next non-comment line within three lines. It interprets `--` as a justification separator. This convention and the examples **are not guaranteed to be valid for every upstream scanner**; verify that the scanner really honours the directive before introducing it.
 
 ## Local policy
 
-Without a config file, **new/modified** suppressions require explicit rule IDs
-and a nonempty `-- justification` comment. Existing suppressions in the base
-revision are grandfathered in. Copy `.suppressgate.toml.example` to
-`.suppressgate.toml` in the target repo to protect particular rules:
+By default, **new or modified** suppressions require explicit rule IDs and a non-empty `-- justification` comment. Suppressions already present in the base revision are grandfathered in.
+
+Copy `.suppressgate.toml.example` to `.suppressgate.toml` in the target repository to configure restrictions:
 
 ```toml
 [policy]
@@ -89,18 +76,11 @@ ruff = ["S608"]
 bandit = ["B602"]
 ```
 
-When protected-rule restrictions are configured, blanket suppressions of that
-tool are rejected even if `require_rule = false`, because a blanket suppression
-might silence a protected rule. Running `check` from a nested directory still
-loads the `.suppressgate.toml` policy from the Git repository root.
+Blanket suppressions for a scanner with protected rules are rejected, even if `require_rule = false`, since they could silence protected rules. The tool loads the policy from the Git repository root even if invoked from a nested directory.
 
-A valid, justified new annotation is printed as `REVIEW` and does not fail CI;
-a missing rule, missing reason or protected rule is `REJECT` and fails.
-`NEW_SUPPRESSION` is always recorded in the structured findings so every
-change can be reviewed. Justifications are only checked for **presence**, not
-truth or quality.
+New suppressions with a present justification are shown as **`REVIEW`** and do not fail CI. New suppressions with a missing reason, missing rule ID, or protected rule are shown as **`REJECT`** and cause a failure. A `REVIEW` result does **not** mean a human has approved the exception.
 
-## Example: what count-only gates miss
+## Example: what a count-only check misses
 
 Base revision:
 
@@ -108,53 +88,41 @@ Base revision:
 old_query()  # noqa: S608 -- legacy exception
 ```
 
-Working tree:
+Proposed change:
 
 ```python
 new_query()  # noqa: S608
 ```
 
-Both versions have one suppression; a count-only gate can pass. SuppressGate
-reports the new `new_query()` occurrence and rejects it for a missing reason.
-If the code is simply moved to another line unchanged, the fingerprint remains
-stable. Recognised Git file renames are also handled.
+Both versions contain one suppression, but the new occurrence has different associated code and is flagged. Merely moving an unchanged suppressed statement to another line does not necessarily count as new. Recognised Git file renames are also handled.
 
-## CI, safely
+## Using it in CI
 
-This tool reads your source and Git history; it does not execute project files,
-modify source or send data anywhere. In a GitHub Actions workflow, first use
-`actions/checkout` with sufficient history (`fetch-depth: 0`), set up Python,
-install this tool from a reviewed/pinned source, then run
-`check --base origin/main`. Do not make a blocking gate mandatory before
-validating it on your own repository.
+SuppressGate can run on pull requests. The repository's `.github/workflows/suppressgate-pr.yml` demonstrates its **own** integration and has been tested using a deliberately failing pull request followed by a correction.
 
-## Fixed prototype boundaries / limitations
+For another repository, check out sufficient Git history (`fetch-depth: 0`), install SuppressGate from a reviewed and pinned version, and compare against the pull request's actual base commit—not an assumed default branch. Start with a non-required check until you have assessed false positives in your repository.
 
-- **Python `.py` and `.pyi` only**, and inline/comment suppressions only. No JS/TS.
-- No understanding of actual Ruff/Bandit/Semgrep findings. It detects directives,
-  not the suppressed diagnostic's identity. A source change that keeps the same
-  code tokens may hide a changed diagnostic; this is **not** a sound security
-  guarantee.
-- Identical suppressed statements in the same file cannot always be distinguished
-  when one is removed and another identical one is introduced. Token-signature
-  matching is a heuristic, not semantic or AST-aware fingerprinting.
-- No monitoring of suppression options in config files, or file-wide/region directives.
-- No automatic justification verification, expiry enforcement, hosted service,
-  dashboard, AI, SARIF export, marketplace action or auto-fixes.
-- Does not verify syntax accepted by the upstream scanners. Rule selectors
-  are parsed as text, not validated against each scanner's current rule catalogue.
-- Parses the repository's full tracked Python history at the chosen base; the
-  prototype is not optimised for large monorepos. Untracked files are included
-  in the working-tree side and tracked ignored/generated files are not exempt.
-- A Git ref that does not exist is a hard error. This prototype does not audit
-  policy-file tampering; secure CI config/branch protections are up to users.
+The tool reads source files and Git history; it does not execute Python project files, rewrite source files or upload results to a hosted SuppressGate service.
 
-## Validation criterion
+## Important limitations
 
-Before broadening the tool, show its actual output to 5 developers familiar
-with Ruff/Bandit. Keep going only if 2 want to **test it on real repositories**
-and the prototype's fingerprints survive representative PR changes. If existing
-tools solve their problem, stop or contribute upstream instead.
+- **Python `.py` and `.pyi` only**, and inline/comment suppressions only; no JavaScript or TypeScript.
+- The tool detects suppression directives, **not** the actual Ruff/Bandit/Semgrep findings they hide. Changes to the diagnostic without changes to the associated code tokens may be missed. This is **not** a sound security guarantee.
+- Identical suppressed statements in the same file cannot always be distinguished when one is removed and another identical one is added. Fingerprint matching is a heuristic, not semantic or AST-aware analysis.
+- No suppression auditing in configuration files, and no file-wide/region directive support.
+- No verification that a justification is true, no expiry enforcement, auto-fixes, SARIF, dashboard, hosted service or AI.
+- Does not validate scanner-specific syntax or rule catalogue entries; rule IDs are parsed as text.
+- May be slow on large repositories; the prototype is not tuned for monorepos. The working-tree side includes untracked files; tracked ignored/generated files are not excluded automatically.
+- A non-existent Git revision is an error. SuppressGate does not audit policy-file tampering; protect your CI workflow, default branch and repository configuration independently.
 
-See `tests/` for same-count swap, unchanged/moved suppressions, reason changes,
-strings, protected rules and real Git revision comparisons.
+## Help validate the alpha
+
+If you work with Ruff, Bandit or Semgrep, try SuppressGate on a **real pull request** and share: whether it found a meaningful new suppression, any false positives, any missed changes, and whether you would choose to keep the check in your workflow.
+
+Feedback and bug reports: [GitHub Issues](https://github.com/g0dse11/SuppressGate/issues).
+
+The first adoption test is deliberately modest: show it to five relevant developers and continue investing only if at least two independently choose to test it in real repositories. If existing tools solve their needs, prefer improving those tools over adding features here.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
