@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "suppressgate"
-version = "0.1.1a1"
+version = "0.1.1a2"
 description = "Detect and review newly introduced Python lint and security suppressions in Git repositories"
 readme = "README.md"
 requires-python = ">=3.11"

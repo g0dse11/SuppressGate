@@ -1,6 +1,6 @@
 # SuppressGate
 
-**Status: Experimental alpha (v0.1.1a1).** Automated tests pass on Python 3.11–3.14 on Windows and Ubuntu. SuppressGate is not an independently audited security product.
+**Status: Experimental alpha candidate (v0.1.1a2).** Automated tests pass on Python 3.11–3.14 on Windows and Ubuntu. SuppressGate is not an independently audited security product.
 
 SuppressGate helps reviewers notice when a Git change introduces or modifies a Python lint/security suppression. Rather than only counting suppressions, it associates each directive with a **source-code token signature**. Removing an old `# noqa: S608` while adding one to *different code* is reported, even if the total number stays the same.
 
