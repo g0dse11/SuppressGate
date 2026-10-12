@@ -105,6 +105,58 @@ def load_policy(root: Path, config: Path | None = None) -> Policy:
         raise GateError(f"Invalid policy {path}: {exc}") from exc
 
 
+def load_review_policy(root: Path, base: str, config: Path | None = None) -> Policy:
+    """Select a policy that the proposed Git change cannot weaken.
+
+    A policy inside the repository must match the policy at the base commit
+    byte-for-byte. Policy edits are deliberately a hard error: such changes
+    require a separate, explicitly reviewed commit before suppressions can be
+    evaluated against them. An explicitly provided policy *outside* the Git
+    worktree is treated as caller-controlled (e.g. a trusted CI policy file).
+    """
+    git_root = _git_root(root.resolve())
+    commit = _base_commit(git_root, base)
+    path = (config if config is not None else git_root / ".suppressgate.toml").absolute()
+
+    # Use canonical paths for the trust boundary, not Path.absolute(): on
+    # Windows, an alias/short path (or a path containing '..') can otherwise
+    # make an in-repository config appear to be an external trusted policy.
+    # Reject links/junctions in the supplied path rather than allowing a
+    # repository-controlled redirect to masquerade as an external config.
+    for ancestor in (path, *path.parents):
+        if ancestor.is_symlink() or (hasattr(ancestor, "is_junction") and ancestor.is_junction()):
+            raise GateError(f"Policy path must not contain symlinks or junctions: {path}")
+    try:
+        relative = path.resolve().relative_to(git_root.resolve()).as_posix()
+    except ValueError:
+        # External policies must be supplied explicitly by the CI operator.
+        # A pull request cannot change such a file through the checked repo.
+        if config is None:
+            raise GateError(f"Unexpected external repository policy: {path}")
+        return load_policy(git_root, path)
+
+    names = _run_git(git_root, "ls-tree", "-rz", "--name-only", commit, "--", relative)
+    in_base = relative.encode("utf-8", errors="surrogateescape") in names.split(b"\0")
+    baseline = _run_git(git_root, "show", f"{commit}:{relative}") if in_base else None
+    try:
+        current = path.read_bytes() if path.exists() else None
+    except OSError as exc:
+        raise GateError(f"Cannot read policy file {path}: {exc}") from exc
+    # Git may store text with LF line endings while a Windows checkout uses
+    # CRLF. TOML treats those line endings equivalently, so do not mistake a
+    # normal Windows checkout for a policy change. Preserve the missing-file
+    # distinction and compare all other bytes strictly.
+    def canonical_line_endings(content: bytes | None) -> bytes | None:
+        return None if content is None else content.replace(b"\r\n", b"\n")
+
+    if canonical_line_endings(current) != canonical_line_endings(baseline):
+        raise GateError(
+            f"Policy {relative} differs from base commit {commit[:12]}; "
+            "review and merge policy changes separately before checking suppressions"
+        )
+    return load_policy(git_root, path if config is not None else None)
+
+
 def _decode_source(raw: bytes, name: str) -> str:
     try:
         encoding, _ = tokenize.detect_encoding(io.BytesIO(raw).readline)

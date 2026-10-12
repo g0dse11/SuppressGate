@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 import sys
 
-from .core import GateError, _git_root, check_git, load_policy, scan_directory
+from .core import GateError, _git_root, check_git, load_review_policy, scan_directory
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -22,7 +22,7 @@ def _parser() -> argparse.ArgumentParser:
     check = sub.add_parser("check", help="Review suppressions added/changed since a Git revision")
     check.add_argument("--base", required=True, help="Git revision, e.g. origin/main or HEAD")
     check.add_argument("--repo", default=".", help="Path to Git repository")
-    check.add_argument("--config", help="Policy TOML path (defaults to .suppressgate.toml)")
+    check.add_argument("--config", help="Policy TOML path; repository policy changes are rejected")
     check.add_argument("--format", choices=("text", "json"), default="text")
     return parser
 
@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
         # invokes `check` in a nested source directory. Otherwise the default
         # policy silently overrides a stricter repository-root policy.
         root = _git_root(Path(args.repo).resolve())
-        policy = load_policy(root, Path(args.config).resolve() if args.config else None)
+        policy = load_review_policy(root, args.base, Path(args.config).absolute() if args.config else None)
         findings, commit = check_git(root, args.base, policy)
         blocked = sum(f.rejected for f in findings)
         if args.format == "json":
