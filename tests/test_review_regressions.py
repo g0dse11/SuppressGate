@@ -153,6 +153,20 @@ class TrustedPolicyTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("differs from base commit", error)
 
+    def test_explicit_in_repo_policy_via_external_lexical_alias_is_rejected(self):
+        # Path.absolute() can retain '..' (and Windows may use short/long path
+        # aliases).  A path that physically lies inside the checkout must not
+        # be treated as an operator-controlled external policy.
+        (self.root / "custom.toml").write_text(
+            '[policy]\nrequire_rule = false\nrequire_reason = false\n', encoding="utf-8"
+        )
+        with tempfile.TemporaryDirectory(dir=self.root.parent) as sibling:
+            aliased = Path(sibling) / ".." / self.root.name / "custom.toml"
+            self.assertTrue(aliased.is_file())
+            code, output, error = self.run_cli("--config", str(aliased))
+        self.assertEqual(code, 2, (output, error))
+        self.assertIn("differs from base commit", error)
+
     def test_explicit_outside_repo_policy_is_supported(self):
         with tempfile.TemporaryDirectory() as directory:
             external = Path(directory) / "trusted.toml"

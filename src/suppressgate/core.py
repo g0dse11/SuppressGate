@@ -118,22 +118,22 @@ def load_review_policy(root: Path, base: str, config: Path | None = None) -> Pol
     commit = _base_commit(git_root, base)
     path = (config if config is not None else git_root / ".suppressgate.toml").absolute()
 
-    # Do not let a symlink redirect the active policy outside the checked tree.
-    if path.is_symlink():
-        raise GateError(f"Policy file must not be a symlink: {path}")
+    # Use canonical paths for the trust boundary, not Path.absolute(): on
+    # Windows, an alias/short path (or a path containing '..') can otherwise
+    # make an in-repository config appear to be an external trusted policy.
+    # Reject links/junctions in the supplied path rather than allowing a
+    # repository-controlled redirect to masquerade as an external config.
+    for ancestor in (path, *path.parents):
+        if ancestor.is_symlink() or (hasattr(ancestor, "is_junction") and ancestor.is_junction()):
+            raise GateError(f"Policy path must not contain symlinks or junctions: {path}")
     try:
-        relative = path.relative_to(git_root).as_posix()
+        relative = path.resolve().relative_to(git_root.resolve()).as_posix()
     except ValueError:
         # External policies must be supplied explicitly by the CI operator.
         # A pull request cannot change such a file through the checked repo.
         if config is None:
             raise GateError(f"Unexpected external repository policy: {path}")
         return load_policy(git_root, path)
-
-    # A parent symlink can also redirect a path, even if the file isn't itself
-    # a symlink; reject it instead of treating it as a trusted external file.
-    if path.resolve() != path:
-        raise GateError(f"Policy path must not use symlinks: {path}")
 
     names = _run_git(git_root, "ls-tree", "-rz", "--name-only", commit, "--", relative)
     in_base = relative.encode("utf-8", errors="surrogateescape") in names.split(b"\0")
