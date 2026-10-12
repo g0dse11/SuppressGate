@@ -1,16 +1,22 @@
+
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "suppressgate-prototype"
-version = "0.1.1.dev0"
-description = "Prototype Git review gate for newly introduced Python lint and security suppressions"
+name = "suppressgate"
+version = "0.1.1a1"
+description = "Detect and review newly introduced Python lint and security suppressions in Git repositories"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
-authors = [{name = "SuppressGate prototype"}]
+license-files = ["LICENSE"]
+authors = [{name = "g0dse11"}]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/g0dse11/SuppressGate"
+Issues = "https://github.com/g0dse11/SuppressGate/issues"
 
 [project.scripts]
 suppress-gate = "suppressgate.cli:main"
