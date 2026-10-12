@@ -1,6 +1,6 @@
 # SuppressGate
 
-**Status: v0.1.1a1 alpha candidate.** Tested on Python 3.11–3.14 on Windows and Ubuntu in GitHub Actions. This is **not** a security guarantee or an independently audited product.
+**Status: Experimental alpha (v0.1.1a1).** Automated tests pass on Python 3.11–3.14 on Windows and Ubuntu. SuppressGate is not an independently audited security product.
 
 SuppressGate helps reviewers notice when a Git change introduces or modifies a Python lint/security suppression. Rather than only counting suppressions, it associates each directive with a **source-code token signature**. Removing an old `# noqa: S608` while adding one to *different code* is reported, even if the total number stays the same.
 
@@ -10,7 +10,7 @@ SuppressGate does **not** replace Ruff, Bandit or Semgrep, run those scanners, o
 
 **Requirements:** Python 3.11+ and Git for revision comparisons. No third-party runtime Python dependencies, account, or hosted service.
 
-When the GitHub repository is publicly accessible, clone and install it:
+Clone the public repository and install the CLI:
 
 ```bash
 git clone https://github.com/g0dse11/SuppressGate.git
@@ -98,7 +98,7 @@ Both versions contain one suppression, but the new occurrence has different asso
 
 ## Using it in CI
 
-SuppressGate can run on pull requests. The repository's `.github/workflows/suppressgate-pr.yml` demonstrates its **own** integration and has been tested using a deliberately failing pull request followed by a correction.
+SuppressGate can run on pull requests. See [the example GitHub Actions workflow](.github/workflows/suppressgate-pr.yml) for an integration example.
 
 For another repository, check out sufficient Git history (`fetch-depth: 0`), install SuppressGate from a reviewed and pinned version, and compare against the pull request's actual base commit—not an assumed default branch. Start with a non-required check until you have assessed false positives in your repository.
 
@@ -115,13 +115,11 @@ The tool reads source files and Git history; it does not execute Python project 
 - May be slow on large repositories; the prototype is not tuned for monorepos. The working-tree side includes untracked files; tracked ignored/generated files are not excluded automatically.
 - A non-existent Git revision is an error. SuppressGate does not audit policy-file tampering; protect your CI workflow, default branch and repository configuration independently.
 
-## Help validate the alpha
+## Feedback and bug reports
 
-If you work with Ruff, Bandit or Semgrep, try SuppressGate on a **real pull request** and share: whether it found a meaningful new suppression, any false positives, any missed changes, and whether you would choose to keep the check in your workflow.
+SuppressGate is an early alpha, and real-world feedback is welcome. If you try it on a Python repository, please report false positives, missed suppressions, unexpected failures or unclear documentation.
 
-Feedback and bug reports: [GitHub Issues](https://github.com/g0dse11/SuppressGate/issues).
-
-The first adoption test is deliberately modest: show it to five relevant developers and continue investing only if at least two independently choose to test it in real repositories. If existing tools solve their needs, prefer improving those tools over adding features here.
+Open an issue at [GitHub Issues](https://github.com/g0dse11/SuppressGate/issues). When reporting a detection issue, include the relevant command, expected behaviour and observed output. Please remove secrets or confidential source code before sharing logs or examples.
 
 ## License
 
